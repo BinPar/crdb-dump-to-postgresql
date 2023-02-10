@@ -12,6 +12,7 @@ to restore de data on your PostgreSQL DB.
 ## Env vars
 
 ON_ERROR_STOP: Default 0. The ON_ERROR_STOP value is used in psql -v ON_ERROR_STOP=
+
 SPLIT_INSERT: Default to 10. The maximum number of rows per INSERT INTO statement.
 
 ## Usage
