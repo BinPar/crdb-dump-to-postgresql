@@ -50,6 +50,14 @@ NR==1{
 /STRING (NOT )?NULL/{
  $0=gensub(/ STRING /," TEXT ","g")
 }
+# change BYTES type to BYTEA type
+/BYTES (NOT )?NULL/{
+ $0=gensub(/ BYTES /," BYTEA ","g")
+}
+# change BOOL type to BOOLEAN type
+/BOOL (NOT )?NULL/{
+ $0=gensub(/ BOOL /," BOOLEAN ","g")
+}
 # change INT8 type to BIGINT type
 /INT8 (NOT )?NULL/{
  $0=gensub(/ INT8 /," BIGINT ","g")
@@ -80,7 +88,8 @@ nextline!=""{
 /^\t(.*) (INT.*|BIGINT) .*DEFAULT unique_rowid/ && !/NOT VISIBLE/{
  fieldname=gensub(/^\t,?(.*)( INT.*| BIGINT).*/,"\\1",1)
  fieldtype=gensub(/^\t.* (INT.*|BIGINT) .*/,"\\1",1)
- sequencename="public."gensub(/([^\042]*\042?[^\042]*)(\042?$)/,"\\1_seq\\2",1,fieldname)
+ tablename=gensub(/.*\.\042?([^\042]*)\042?/,"\\1",1,table)
+ sequencename="public."gensub(/([^\042]*\042?[^\042]*)(\042?$)/,"\\1_"tablename"_seq\\2",1,fieldname)
  linksequences=linksequences"create sequence "sequencename" AS "fieldtype" MINVALUE 1 INCREMENT 1 START 1;\n"
  linksequences=linksequences"alter sequence "sequencename" owned by "table"."fieldname";\n"
  linksequences=linksequences"SELECT SETVAL(\047"sequencename"\047, COALESCE(MAX("fieldname"), 1) ) FROM "table";\n"
@@ -135,6 +144,23 @@ cp reset-sequences.sql $foldername
 
 pushd $foldername
 
+rolePassword=$(head -c 18 /dev/urandom | base64 | awk '{ print substr(gensub(/[^a-zA-Z0-9]/, "", "g"),1,20) }')
+cat << EOF > $database-create-role-and-db.sql
+CREATE ROLE "$database" WITH LOGIN PASSWORD '$rolePassword';
+
+CREATE DATABASE "$database"
+WITH OWNER "$database"
+ENCODING 'UTF8'
+LC_COLLATE = 'es_ES.utf8'
+LC_CTYPE = 'es_ES.utf8'
+TEMPLATE template0;
+
+GRANT ALL PRIVILEGES ON DATABASE "$database" TO "$database";
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO "$database";
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO "$database";
+EOF
+
+
 cat << EOF > $database-restore.sh
 #!/bin/bash
 psql \$1 -v ON_ERROR_STOP=$shouldStopOnError -ef tab-$ddlfilename > tab-$ddlfilename.log
@@ -145,7 +171,7 @@ done
 psql \$1 -v ON_ERROR_STOP=$shouldStopOnError -ef ind-$ddlfilename > ind-$ddlfilename.log
 psql \$1 -v ON_ERROR_STOP=$shouldStopOnError -ef ref-$ddlfilename > ref-$ddlfilename.log
 psql \$1 -v ON_ERROR_STOP=$shouldStopOnError -ef link-$ddlfilename > link-$ddlfilename.log
-rm -rf *.sql *.csv
+# rm -rf *.sql *.csv
 EOF
 
 chmod +x $database-restore.sh
