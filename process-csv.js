@@ -14,6 +14,7 @@ const splitInsert = process.env.SPLIT_INSERT
   : 10;
 let processedNumber = 0;
 const writeStream = fs.createWriteStream(`${file.replace('.csv', '.sql')}`);
+writeStream.write(`alter table ${table} disable trigger all;\n`);
 const s = fs
   .createReadStream(file)
   .pipe(es.split(RECORD_DELIMITER))
@@ -55,6 +56,7 @@ const s = fs
         console.log(
           `File ${file} process completed, record processed: ${processedNumber}`,
         );
+        writeStream.write(`;\nalter table ${table} enable trigger all;`);
         writeStream.close();
       }),
   );
