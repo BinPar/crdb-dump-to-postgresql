@@ -13,10 +13,15 @@ recordDelimiterChar=$(echo "Ag==" | base64 -d -w 0)
 mkdir $foldername
 
 ddlfilename=$database-ddl.sql
+alltablesfilename=$database-alltables.txt
+createtypes=$database-types.sql
 
 psql $1 -Ato ./$foldername/$ddlfilename -c "
 show create all tables
 "
+
+psql $1 -A -c "select name as namedeleteme from crdb_internal.tables where database_name = '$database'" > ./$foldername/$alltablesfilename
+psql $1 -Ato ./$foldername/$createtypes -c "show create all types"
 
 pushd $foldername
 
@@ -120,29 +125,29 @@ print linksequences > "link-"FILENAME
 }
 ' $ddlfilename
 
-popd
-
-all_tables=$(psql $1 -A -c "select name as namedeleteme from crdb_internal.tables where database_name = '$database'" | awk '
+awk '
 /_.*_seq/{
   $0="namedeleteme"
 }
 /[(].*rows[)]/{
   $0="namedeleteme"
 }
-!/namedeleteme/{ print $0 }
-')
+!/namedeleteme/{ print > FILENAME }
+' $alltablesfilename
 
-for table in $all_tables;do
+popd
+
+while read table;do
   if [[ $table == "directus_activity" ]];then
     continue
   fi
   if [[ $table == "directus_revisions" ]];then
     continue
   fi
-  psql $1 -At -F $fieldDelimiterChar -R $recordDelimiterChar -c "select * from public.\"$table\"" > ./$foldername/$database-$table.csv
-  truncate -s -1 ./$foldername/$database-$table.csv
+  psql $1 -At -F $fieldDelimiterChar -R $recordDelimiterChar -c "select * from public.\"$table\"" > "./$foldername/$database-$table.csv"
+  truncate -s -1 "./$foldername/$database-$table.csv"
   node process-csv.js "public.\"$table\"" "./$foldername/$database-$table.csv"
-done
+done <./$foldername/$alltablesfilename
 
 cp reset-sequences.sql $foldername
 
@@ -167,11 +172,11 @@ EOF
 
 cat << EOF > $database-restore.sh
 #!/bin/bash
+psql \$1 -v ON_ERROR_STOP=$shouldStopOnError -ef $createtypes > $createtypes.log
 psql \$1 -v ON_ERROR_STOP=$shouldStopOnError -ef tab-$ddlfilename > tab-$ddlfilename.log
-all_tables="$all_tables"
-for table in \$all_tables;do
-  psql \$1 -v ON_ERROR_STOP=$shouldStopOnError -f $database-\$table.sql
-done
+while read table;do
+  psql \$1 -v ON_ERROR_STOP=$shouldStopOnError -f "$database-\$table.sql"
+done <./$alltablesfilename
 psql \$1 -v ON_ERROR_STOP=$shouldStopOnError -ef ind-$ddlfilename > ind-$ddlfilename.log
 psql \$1 -v ON_ERROR_STOP=$shouldStopOnError -ef ref-$ddlfilename > ref-$ddlfilename.log
 psql \$1 -v ON_ERROR_STOP=$shouldStopOnError -ef link-$ddlfilename > link-$ddlfilename.log
