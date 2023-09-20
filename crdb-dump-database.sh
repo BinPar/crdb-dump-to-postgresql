@@ -50,6 +50,10 @@ NR==1{
 /STRING (NOT )?NULL/{
  $0=gensub(/ STRING /," TEXT ","g")
 }
+# change STRING(X) type to VARCHAR(X) type
+/STRING[(][0-9]*[)] (NOT )?NULL/{
+ $0=gensub(/ STRING([(][0-9]*[)]) /," VARCHAR\\1 ","g")
+}
 # change BYTES type to BYTEA type
 /BYTES (NOT )?NULL/{
  $0=gensub(/ BYTES /," BYTEA ","g")
