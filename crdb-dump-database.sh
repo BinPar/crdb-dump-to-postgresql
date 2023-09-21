@@ -102,7 +102,7 @@ nextline!=""{
  linksequences=linksequences"create sequence "sequencename" AS "fieldtype" MINVALUE 1 INCREMENT 1 START 1;\n"
  linksequences=linksequences"alter sequence "sequencename" owned by "table"."fieldname";\n"
  linksequences=linksequences"SELECT SETVAL(\047"sequencename"\047, COALESCE(MAX("fieldname"), 1) ) FROM "table";\n"
- $0=gensub(/(.*)(DEFAULT unique_rowid[()]*)(.*)$/,"\\1\\3",1)
+ $0=gensub(/(.*)(DEFAULT unique_rowid[()]*)(.*)$/,"\\1DEFAULT nextval(\047"sequencename"\047::regclass)\\3",1)
 }
 /^\t*,(UNIQUE )?INDEX/{
  indexes=indexes"\n"gensub(/ STORING /," INCLUDE ",1,gensub(/^\t*,(UNIQUE )?(INDEX)([^(]+)(.*)( STORING)?(.*)$/,"create \\1\\2 \\3 on "table" \\4 \\5 \\6;",1))
